@@ -4,7 +4,7 @@ Autoformalizer with Tool Feedback (ATF) aims to enhance the process of autoforma
 
 <div align="center"> 
         <a href="https://arxiv.org/pdf/2510.06857"><img src="https://img.shields.io/static/v1?label=Paper&message=Arxiv&color=red"></a> &ensp;
-        <a href="https://qguo-create.github.io/ATF-blog.github.io/"><img src="https://img.shields.io/static/v1?label=Dataset&message=Project Page&color=blue"></a> &ensp;
+        <a href="https://qguo-create.github.io/ATF-blog.github.io/"><img src="https://img.shields.io/static/v1?label=githubio&message=Page&color=blue"></a> &ensp;
 </div>
 
 ## Overview
