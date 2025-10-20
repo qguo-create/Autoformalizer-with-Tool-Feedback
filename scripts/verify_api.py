@@ -3,6 +3,9 @@ import json
 from typing import Dict, List
 from kimina_client import KiminaSandboxClient, Snippet
 
+# To be filled
+server_heartbeat_record_path = "xxx"
+
 def format_results(results):
 
     returns = []
@@ -37,7 +40,6 @@ def format_results(results):
     return returns
 
 def batch_verify_lean_codes(lean_contents: List[str], concurrency: int = 32, server_timeout=600) -> List[Dict]:
-    server_heartbeat_record_path = "/mnt/dolphinfs/hdd_pool/docker/user/hadoop-aipnlp/zhangjianfei09/cfs/kls_heartbeat"
     
     client = KiminaSandboxClient(
         heartbeat_record_path=server_heartbeat_record_path,

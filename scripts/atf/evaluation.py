@@ -8,25 +8,25 @@ from atf.utils import parse_tool_call, get_input_prompt, setup_logger, read_json
 
 def extract_syntax_passed_samples(all_results):
     """
-    从所有结果中提取语法检查通过的样本
-    返回每个样本最后一次语法检查通过的代码
+    Extract samples that have passed syntax checks from all results.
+    Return the code of each sample that passed the syntax check the last time.
     """
     syntax_passed_samples = []
     
     for result in all_results:
-        # 查找该样本所有的语法检查结果
+        # Find all syntax check results for this sample
         syntax_results = []
         lean4_codes = []
         
-        # 遍历所有工具调用结果
+        # Iterate through all tool call results
         for i, tool_result in enumerate(result.get('tools', [])):
-            # 检查是否是语法检查结果
+            # Check if it's a syntax check result
             if isinstance(tool_result, dict) and 'pass' in tool_result:
-                # 找到对应的response中的lean4_code
+                # Find corresponding lean4_code in responses
                 responses = result.get('responses', [])
                 if i < len(responses):
                     response = responses[i]
-                    # 解析response中的tool_call来获取lean4_code
+                    # Parse tool_call to get lean4_code
                     tool_call = parse_tool_call(response)
                     if tool_call.get('name') == 'syntax_check':
                         lean4_code = tool_call.get('arguments', {}).get('lean4_code', '')
@@ -38,14 +38,14 @@ def extract_syntax_passed_samples(all_results):
                                 'iteration': i
                             })
         
-        # 找到最后一次语法检查通过的代码
+        # Find the last passed syntax check code
         last_passed_syntax = None
-        for syntax_result in reversed(syntax_results):  # 从后往前找
+        for syntax_result in reversed(syntax_results):  # Search from last
             if syntax_result['pass']:
                 last_passed_syntax = syntax_result
                 break
         
-        # 如果找到了语法通过的代码，添加到结果中
+        # If found, add to results
         if last_passed_syntax:
             syntax_passed_sample = {
                 'index': result['index'],
@@ -57,26 +57,26 @@ def extract_syntax_passed_samples(all_results):
                 'final_failure_reason': result.get('failure_reason', ''),
                 'total_iterations': result.get('iterations', 0),
                 'informal_statement': result['data'].get('informal_statement', ''),
-                'formal_statement': result['data'].get('formal_statement', ''),  # 如果有的话
+                'formal_statement': result['data'].get('formal_statement', ''),  
             }
             syntax_passed_samples.append(syntax_passed_sample)
     
     return syntax_passed_samples
 
 def calculate_statistics(all_runs_stats, all_results):
-    """计算多次运行的统计信息，包括无偏pass@k"""
+    """Calculate statistics for multiple runs, including unbiased pass@k"""
     if not all_runs_stats:
         return {}
     
-    # 提取各项指标（保持原有统计）
+    # Extract metrics
     success_rates = [stats['success_rate'] for stats in all_runs_stats]
     syntax_pass_rates = [stats['syntax_pass_rate'] for stats in all_runs_stats]
     avg_iterations = [stats['avg_iterations'] for stats in all_runs_stats]
     total_times = [stats['total_time'] for stats in all_runs_stats]
     avg_times_per_sample = [stats['avg_time_per_sample'] for stats in all_runs_stats]
     
-    # 计算无偏pass@k
-    # 按样本index分组，收集每个样本在不同run中的成功情况
+    # Calculate unbiased pass@k
+    # Group samples by index, collect success status across runs
     sample_success_by_index = {}
     sample_syntax_pass_by_index = {}
     
@@ -88,7 +88,7 @@ def calculate_statistics(all_runs_stats, all_results):
                 sample_syntax_pass_by_index[sample_idx] = []
             
             sample_success_by_index[sample_idx].append(result.get('completed', False))
-            # 检查是否有语法通过的代码
+            # Check if any syntax check passed
             has_syntax_pass = any(
                 tool_result.get('pass', False) 
                 for tool_result in result.get('tools', [])
@@ -97,7 +97,7 @@ def calculate_statistics(all_runs_stats, all_results):
             sample_syntax_pass_by_index[sample_idx].append(has_syntax_pass)
     
     def calculate_unbiased_pass_at_k(success_dict, k):
-        """计算无偏pass@k"""
+        """Calculate unbiased pass@k"""
         if not success_dict:
             return 0.0
         
@@ -105,15 +105,15 @@ def calculate_statistics(all_runs_stats, all_results):
         passed_samples = 0
         
         for sample_idx, successes in success_dict.items():
-            n = len(successes)  # 该样本的尝试次数
-            c = sum(successes)  # 该样本的成功次数
+            n = len(successes)  # Number of attempts
+            c = sum(successes)  # Number of successes
             
             if n < k:
-                # 如果尝试次数少于k，按现有成功率计算
+                # If attempts < k, use existing success rate
                 if c > 0:
                     passed_samples += 1
             else:
-                # 计算无偏pass@k: 1 - C(n-c, k) / C(n, k)
+                # Calculate unbiased pass@k: 1 - C(n-c, k) / C(n, k)
                 if c > 0:
                     from math import comb
                     prob_fail = comb(n - c, k) / comb(n, k) if comb(n, k) > 0 else 0
@@ -122,19 +122,19 @@ def calculate_statistics(all_runs_stats, all_results):
         
         return (passed_samples / total_samples) * 100 if total_samples > 0 else 0.0
     
-    # 计算pass@1, pass@8, pass@16
+    # Calculate pass@1, pass@8, pass@16
     pass_at_1 = calculate_unbiased_pass_at_k(sample_success_by_index, 1)
     pass_at_8 = calculate_unbiased_pass_at_k(sample_success_by_index, 8)
     pass_at_16 = calculate_unbiased_pass_at_k(sample_success_by_index, 16)
     
-    # 计算语法通过的pass@k
+    # Calculate syntax pass@k
     syntax_pass_at_1 = calculate_unbiased_pass_at_k(sample_syntax_pass_by_index, 1)
     syntax_pass_at_8 = calculate_unbiased_pass_at_k(sample_syntax_pass_by_index, 8)
     syntax_pass_at_16 = calculate_unbiased_pass_at_k(sample_syntax_pass_by_index, 16)
     
     statistics = {
         'num_runs': len(all_runs_stats),
-        # 保持原有统计（用于兼容性）
+        # Preserve original statistics (for compatibility)
         'success_rate': {
             'mean': np.mean(success_rates),
             'std': np.std(success_rates),
@@ -160,7 +160,7 @@ def calculate_statistics(all_runs_stats, all_results):
             'std': np.std(avg_times_per_sample),
             'values': avg_times_per_sample
         },
-        # 新增无偏pass@k指标
+
         'unbiased_pass_at_k': {
             'pass_at_1': pass_at_1,
             'pass_at_8': pass_at_8,
@@ -174,9 +174,9 @@ def calculate_statistics(all_runs_stats, all_results):
     return statistics
 
 def run_single_evaluation(dataset_path, dataset_name, run_id, args, models, tokenizer, sampling_params, consistency_params, logger):
-    """运行单次评估"""
+    """Run single evaluation run"""
     
-    # 为每次运行创建独立的输出路径
+    # Create independent output path for each run
     run_output_dir = os.path.join(args.output_dir, dataset_name, f"run_{run_id}")
     os.makedirs(run_output_dir, exist_ok=True)
     
@@ -184,21 +184,21 @@ def run_single_evaluation(dataset_path, dataset_name, run_id, args, models, toke
     stats_path = os.path.join(run_output_dir, "stats.json")
     syntax_passed_path = os.path.join(run_output_dir, "syntax_passed_samples.jsonl")
     
-    # 检查是否已经完成（断点续跑功能）
+    # Check if already completed (resume functionality)
     if os.path.exists(stats_path) and os.path.exists(output_path):
         try:
-            # 读取已有的统计信息
+            # Read existing statistics
             with open(stats_path, 'r', encoding='utf-8') as f:
                 run_stats = json.load(f)
             
-            # 读取已有的结果
+            # Read existing results
             results_to_save = []
             with open(output_path, 'r', encoding='utf-8') as f:
                 for line in f:
                     if line.strip():
                         results_to_save.append(json.loads(line))
             
-            # 读取语法通过的样本
+            # Read syntax passed samples
             syntax_passed_samples = []
             if os.path.exists(syntax_passed_path):
                 with open(syntax_passed_path, 'r', encoding='utf-8') as f:
@@ -206,27 +206,27 @@ def run_single_evaluation(dataset_path, dataset_name, run_id, args, models, toke
                         if line.strip():
                             syntax_passed_samples.append(json.loads(line))
             
-            # 验证结果完整性
+            # Validate result completeness
             data = read_jsonl(dataset_path)
             if len(results_to_save) == len(data):
-                logger.info(f"✓ 第 {run_id} 次评估已完成，跳过 - 数据集: {dataset_name}")
-                logger.info(f"  成功率: {run_stats.get('success_rate', 0):.2f}%")
-                logger.info(f"  语法通过率: {run_stats.get('syntax_pass_rate', 0):.2f}%")
+                logger.info(f"✓ Evaluation {run_id} already completed, skipping - Dataset: {dataset_name}")
+                logger.info(f"  Success rate: {run_stats.get('success_rate', 0):.2f}%")
+                logger.info(f"  Syntax pass rate: {run_stats.get('syntax_pass_rate', 0):.2f}%")
                 return run_stats, results_to_save, syntax_passed_samples
             else:
-                logger.warning(f"第 {run_id} 次评估结果不完整 ({len(results_to_save)}/{len(data)})，重新开始")
+                logger.warning(f"Evaluation {run_id} incomplete ({len(results_to_save)}/{len(data)}), restarting")
         except Exception as e:
-            logger.warning(f"读取已有结果失败: {e}，重新开始评估")
+            logger.warning(f"Failed to read existing results: {e}, restarting evaluation")
     
-    # 原有的处理逻辑
-    logger.info(f"开始第 {run_id} 次评估 - 数据集: {dataset_name}")
-    logger.info(f"输出路径: {output_path}")
+    # Original processing logic
+    logger.info(f"Starting evaluation {run_id} - Dataset: {dataset_name}")
+    logger.info(f"Output path: {output_path}")
     
-    # 加载数据
+    # Load data
     data = read_jsonl(dataset_path)
-    logger.info(f"成功读取数据，总计 {len(data)} 条记录")
+    logger.info(f"Successfully read data, total {len(data)} records")
 
-    # 初始化样本
+    # Initialize samples
     samples = []
     for i, d in enumerate(data):
         samples.append({
@@ -242,25 +242,26 @@ def run_single_evaluation(dataset_path, dataset_name, run_id, args, models, toke
             'chat_count': 0
         })
 
-    # 创建事件驱动流水线管理器
+    # Create event-driven pipeline manager
     pipeline_manager = EventDrivenPipelineManager(
         models['atf1'], models['atf2'], models['qwq_model'], models['qwen3_model'], tokenizer,
         sampling_params, consistency_params, logger, 
         args.batch_size, args.max_iterations, output_path, args.max_prompt_length
     )
 
-    # 运行流水线
+    # Run pipeline
+
     start_time = time.time()
     try:
         finished_samples = pipeline_manager.start_pipeline(samples)
     except KeyboardInterrupt:
-        logger.info("收到中断信号，正在停止流水线...")
+        logger.info("Received interrupt signal, stopping pipeline...")
         pipeline_manager.stop_pipeline()
         raise
     
     end_time = time.time()
 
-    # 保存所有结果（包括失败的样本）
+    # Save all results (including failed samples)
     results_to_save = []
     for sample in finished_samples:
         results_to_save.append({
@@ -275,17 +276,17 @@ def run_single_evaluation(dataset_path, dataset_name, run_id, args, models, toke
             'iterations': sample['iteration_count']
         })
 
-    # 提取语法通过的样本
+    # Extract syntax passed samples
     syntax_passed_samples = extract_syntax_passed_samples(results_to_save)
     
-    # 保存语法通过的样本
+    # Save syntax passed samples
     with open(syntax_passed_path, 'w', encoding='utf-8') as f:
         for sample in syntax_passed_samples:
             f.write(json.dumps(sample, ensure_ascii=False) + '\n')
     
-    logger.info(f"✓ 保存 {len(syntax_passed_samples)} 个语法通过样本到 {syntax_passed_path}")
+    logger.info(f"✓ Saved {len(syntax_passed_samples)} syntax passed samples to {syntax_passed_path}")
 
-    # 统计信息
+    # Statistics
     total_time = (end_time - start_time)
     completed_count = sum(1 for sample in finished_samples if sample.get('completed', False))
     failed_count = sum(1 for sample in finished_samples if sample.get('failed', False))
@@ -295,7 +296,7 @@ def run_single_evaluation(dataset_path, dataset_name, run_id, args, models, toke
     success_rate = (completed_count / len(samples)) * 100 if samples else 0
     syntax_pass_rate = (len(syntax_passed_samples) / len(samples)) * 100 if samples else 0
 
-    # 保存运行统计信息
+    # Save run statistics
     run_stats = {
         'dataset_name': dataset_name,
         'run_id': run_id,
@@ -311,39 +312,39 @@ def run_single_evaluation(dataset_path, dataset_name, run_id, args, models, toke
         'avg_time_per_sample': total_time / len(samples) if samples else 0
     }
     
-    # 保存统计信息到文件
+    # Save statistics to file
     with open(stats_path, 'w', encoding='utf-8') as f:
         json.dump(run_stats, f, ensure_ascii=False, indent=2)
 
-    logger.info(f"第 {run_id} 次评估完成 - 数据集: {dataset_name}")
-    logger.info(f"成功率: {success_rate:.2f}%, 语法通过率: {syntax_pass_rate:.2f}%, 平均迭代次数: {avg_iterations:.2f}")
+    logger.info(f"Completed evaluation {run_id} - Dataset: {dataset_name}")
+    logger.info(f"Success rate: {success_rate:.2f}%, Syntax pass rate: {syntax_pass_rate:.2f}%, Avg iterations: {avg_iterations:.2f}")
     
     return run_stats, results_to_save, syntax_passed_samples
 
 def run_multi_dataset_evaluation(args, models, tokenizer):
-    """运行多数据集多次评估"""
+    """Run multi-dataset multi-run evaluation"""
     
-    # 设置日志记录器
+    # Setup logger
     logger, log_path = setup_logger(args.log_dir)
     logger.info("=" * 80)
-    logger.info("开始多数据集多次评估任务（支持断点续跑）")
-    logger.info(f"数据集目录: {args.input_dir}")
-    logger.info(f"输出目录: {args.output_dir}")
-    logger.info(f"评估次数: {args.num_runs}")
-    logger.info(f"批次大小: {args.batch_size}")
-    logger.info(f"最大迭代次数: {args.max_iterations}")
+    logger.info("Starting multi-dataset multi-run evaluation (with resume support)")
+    logger.info(f"Dataset directory: {args.input_dir}")
+    logger.info(f"Output directory: {args.output_dir}")
+    logger.info(f"Number of runs: {args.num_runs}")
+    logger.info(f"Batch size: {args.batch_size}")
+    logger.info(f"Max iterations: {args.max_iterations}")
     logger.info("=" * 80)
 
-    # 创建输出目录
+    # Create output directory
     os.makedirs(args.output_dir, exist_ok=True)
     
-    # 获取所有数据集文件
+    # Get all dataset files
     dataset_files = []
     if os.path.isfile(args.input_dir):
-        # 单个文件
+        # Single file
         dataset_files = [(os.path.basename(args.input_dir).replace('.jsonl', ''), args.input_dir)]
     else:
-        # 目录中的所有jsonl文件
+        # All jsonl files in directory
         for filename in os.listdir(args.input_dir):
             if filename.endswith('.jsonl'):
                 dataset_name = filename.replace('.jsonl', '')
@@ -351,21 +352,21 @@ def run_multi_dataset_evaluation(args, models, tokenizer):
                 dataset_files.append((dataset_name, dataset_path))
     
     if not dataset_files:
-        logger.error("未找到任何数据集文件")
+        logger.error("No dataset files found")
         return
     
-    logger.info(f"找到 {len(dataset_files)} 个数据集: {[name for name, _ in dataset_files]}")
+    logger.info(f"Found {len(dataset_files)} datasets: {[name for name, _ in dataset_files]}")
     
-    # 存储所有结果
+    # Store all results
     all_dataset_results = {}
     
-    # 对每个数据集进行评估
+    # Evaluate each dataset
     for dataset_name, dataset_path in dataset_files:
         logger.info(f"\n{'='*60}")
-        logger.info(f"开始评估数据集: {dataset_name}")
-        logger.info(f"数据集路径: {dataset_path}")
+        logger.info(f"Evaluating dataset: {dataset_name}")
+        logger.info(f"Dataset path: {dataset_path}")
         
-        # 检查已完成的评估次数
+        # Check completed runs
         completed_runs = 0
         existing_runs_stats = []
         existing_results_by_run = []
@@ -378,12 +379,12 @@ def run_multi_dataset_evaluation(args, models, tokenizer):
             
             if os.path.exists(stats_path) and os.path.exists(results_path):
                 try:
-                    # 读取已有统计信息
+                    # Read existing statistics
                     with open(stats_path, 'r', encoding='utf-8') as f:
                         run_stats = json.load(f)
                     existing_runs_stats.append(run_stats)
                     
-                    # 读取已有结果
+                    # Read existing results
                     run_results = []
                     with open(results_path, 'r', encoding='utf-8') as f:
                         for line in f:
@@ -391,7 +392,7 @@ def run_multi_dataset_evaluation(args, models, tokenizer):
                                 run_results.append(json.loads(line))
                     existing_results_by_run.append(run_results)
                     
-                    # 读取语法通过的样本
+                    # Read syntax passed samples
                     syntax_passed_path = os.path.join(run_output_dir, "syntax_passed_samples.jsonl")
                     if os.path.exists(syntax_passed_path):
                         with open(syntax_passed_path, 'r', encoding='utf-8') as f:
@@ -406,11 +407,11 @@ def run_multi_dataset_evaluation(args, models, tokenizer):
         if completed_runs > 0:
             logger.info(f"发现已完成的评估: {completed_runs}/{args.num_runs}")
         
-        # 如果所有评估都已完成，跳过
+        # Skip if all runs completed
         if completed_runs == args.num_runs:
-            logger.info(f"✓ 数据集 {dataset_name} 所有 {args.num_runs} 次评估已完成，跳过")
+            logger.info(f"✓ Dataset {dataset_name} all {args.num_runs} runs completed, skipping")
             
-            # 使用已有结果
+            # Use existing results
             dataset_runs_stats = existing_runs_stats
             dataset_results_by_run = existing_results_by_run
             dataset_all_results = []
@@ -419,7 +420,7 @@ def run_multi_dataset_evaluation(args, models, tokenizer):
             dataset_all_syntax_passed = existing_syntax_passed
             
         else:
-            logger.info(f"继续进行剩余 {args.num_runs - completed_runs} 次评估")
+            logger.info(f"Proceeding with remaining {args.num_runs - completed_runs} evaluations")
             logger.info(f"{'='*60}")
             
             dataset_runs_stats = existing_runs_stats.copy()
@@ -429,22 +430,22 @@ def run_multi_dataset_evaluation(args, models, tokenizer):
                 dataset_all_results.extend(run_results)
             dataset_all_syntax_passed = existing_syntax_passed.copy()
 
-            # 进行剩余的评估
+            # Run remaining evaluations
             for run_id in range(args.num_runs):
-                # 跳过已完成的评估
+                # Skip completed runs
                 run_output_dir = os.path.join(args.output_dir, dataset_name, f"run_{run_id}")
                 stats_path = os.path.join(run_output_dir, "stats.json")
                 results_path = os.path.join(run_output_dir, "results.jsonl")
                 
                 if os.path.exists(stats_path) and os.path.exists(results_path):
-                    logger.info(f"跳过已完成的第 {run_id + 1} 次评估")
+                    logger.info(f"Skipping completed run {run_id + 1}")
                     continue
                 
                 logger.info(f"\n{'-'*40}")
-                logger.info(f"数据集 {dataset_name} - 第 {run_id + 1}/{args.num_runs} 次评估")
+                logger.info(f"Dataset {dataset_name} - Run {run_id + 1}/{args.num_runs}")
                 logger.info(f"{'-'*40}")
                 
-                # 设置采样参数
+                # Set sampling parameters
                 sampling_params = SamplingParams(
                     temperature=args.temperature, 
                     max_tokens=args.max_length, 
@@ -455,11 +456,11 @@ def run_multi_dataset_evaluation(args, models, tokenizer):
 
                 consistency_params = SamplingParams(
                     temperature=0.0,
-                    max_tokens=16000, 
+                    max_tokens=16384, 
                     n=1, 
                 )
                 
-                # 运行单次评估
+                # Run single evaluation
                 try:
                     run_stats, run_results, syntax_passed_samples = run_single_evaluation(
                         dataset_path, dataset_name, run_id, args, 
@@ -472,10 +473,10 @@ def run_multi_dataset_evaluation(args, models, tokenizer):
                     dataset_results_by_run.append(run_results)
                     
                 except Exception as e:
-                    logger.error(f"第 {run_id + 1} 次评估失败: {e}")
+                    logger.error(f"Run {run_id + 1} failed: {e}")
                     continue
         
-        # 计算该数据集的统计信息
+        # Calculate dataset statistics
         if dataset_runs_stats:
             dataset_statistics = calculate_statistics(dataset_runs_stats, dataset_results_by_run)
             all_dataset_results[dataset_name] = {
@@ -485,7 +486,7 @@ def run_multi_dataset_evaluation(args, models, tokenizer):
                 'all_syntax_passed': dataset_all_syntax_passed
             }
             
-            # 保存数据集级别的统计信息
+            # Save dataset-level statistics
             dataset_summary_path = os.path.join(args.output_dir, dataset_name, "summary.json")
             os.makedirs(os.path.dirname(dataset_summary_path), exist_ok=True)
             
@@ -499,19 +500,19 @@ def run_multi_dataset_evaluation(args, models, tokenizer):
             with open(dataset_summary_path, 'w', encoding='utf-8') as f:
                 json.dump(summary_data, f, ensure_ascii=False, indent=2)
             
-            # 保存所有结果（包括错误样本）
+            # Save all results (including errors)
             all_results_path = os.path.join(args.output_dir, dataset_name, "all_results.jsonl")
             with open(all_results_path, 'w', encoding='utf-8') as f:
                 for result in dataset_all_results:
                     f.write(json.dumps(result, ensure_ascii=False) + '\n')
             
-            # 保存所有语法通过的样本（合并所有运行）
+            # Save all syntax passed samples (merged runs)
             all_syntax_passed_path = os.path.join(args.output_dir, dataset_name, "all_syntax_passed_samples.jsonl")
             with open(all_syntax_passed_path, 'w', encoding='utf-8') as f:
                 for sample in dataset_all_syntax_passed:
                     f.write(json.dumps(sample, ensure_ascii=False) + '\n')
             
-            # 去重保存语法通过的样本（按index去重，保留最后一次运行的结果）
+            # Deduplicate syntax passed samples (keep last run's result)
             unique_syntax_passed = {}
             for sample in dataset_all_syntax_passed:
                 unique_syntax_passed[sample['index']] = sample
@@ -521,27 +522,27 @@ def run_multi_dataset_evaluation(args, models, tokenizer):
                 for sample in sorted(unique_syntax_passed.values(), key=lambda x: x['index']):
                     f.write(json.dumps(sample, ensure_ascii=False) + '\n')
             
-            # 输出数据集统计信息
+            # Output dataset statistics
             logger.info(f"\n{'='*60}")
-            logger.info(f"数据集 {dataset_name} 评估完成")
-            logger.info(f"评估次数: {len(dataset_runs_stats)}")
-            logger.info(f"成功率: {dataset_statistics['success_rate']['mean']:.2f}% ± {dataset_statistics['success_rate']['std']:.2f}%")
-            logger.info(f"语法通过率: {dataset_statistics['syntax_pass_rate']['mean']:.2f}% ± {dataset_statistics['syntax_pass_rate']['std']:.2f}%")
-            logger.info(f"平均迭代次数: {dataset_statistics['avg_iterations']['mean']:.2f} ± {dataset_statistics['avg_iterations']['std']:.2f}")
+            logger.info(f"Dataset {dataset_name} evaluation completed")
+            logger.info(f"Number of runs: {len(dataset_runs_stats)}")
+            logger.info(f"Success rate: {dataset_statistics['success_rate']['mean']:.2f}% ± {dataset_statistics['success_rate']['std']:.2f}%")
+            logger.info(f"Syntax pass rate: {dataset_statistics['syntax_pass_rate']['mean']:.2f}% ± {dataset_statistics['syntax_pass_rate']['std']:.2f}%")
+            logger.info(f"Average iterations: {dataset_statistics['avg_iterations']['mean']:.2f} ± {dataset_statistics['avg_iterations']['std']:.2f}")
 
-            # pass@k指标输出
+            # pass@k output
             pass_at_k = dataset_statistics['unbiased_pass_at_k']
-            logger.info(f"无偏Pass@1: {pass_at_k['pass_at_1']:.2f}%")
-            logger.info(f"无偏Pass@8: {pass_at_k['pass_at_8']:.2f}%")
-            logger.info(f"无偏Pass@16: {pass_at_k['pass_at_16']:.2f}%")
-            logger.info(f"语法Pass@1: {pass_at_k['syntax_pass_at_1']:.2f}%")
-            logger.info(f"语法Pass@8: {pass_at_k['syntax_pass_at_8']:.2f}%")
-            logger.info(f"语法Pass@16: {pass_at_k['syntax_pass_at_16']:.2f}%")
+            logger.info(f"Unbiased Pass@1: {pass_at_k['pass_at_1']:.2f}%")
+            logger.info(f"Unbiased Pass@8: {pass_at_k['pass_at_8']:.2f}%")
+            logger.info(f"Unbiased Pass@16: {pass_at_k['pass_at_16']:.2f}%")
+            logger.info(f"Syntax Pass@1: {pass_at_k['syntax_pass_at_1']:.2f}%")
+            logger.info(f"Syntax Pass@8: {pass_at_k['syntax_pass_at_8']:.2f}%")
+            logger.info(f"Syntax Pass@16: {pass_at_k['syntax_pass_at_16']:.2f}%")
 
-            logger.info(f"平均处理时间: {dataset_statistics['total_time']['mean']:.2f}s ± {dataset_statistics['total_time']['std']:.2f}s")
-            logger.info(f"平均每样本时间: {dataset_statistics['avg_time_per_sample']['mean']:.2f}s ± {dataset_statistics['avg_time_per_sample']['std']:.2f}s")
+            logger.info(f"Average processing time: {dataset_statistics['total_time']['mean']:.2f}s ± {dataset_statistics['total_time']['std']:.2f}s")
+            logger.info(f"Average time per sample: {dataset_statistics['avg_time_per_sample']['mean']:.2f}s ± {dataset_statistics['avg_time_per_sample']['std']:.2f}s")
 
-    # 生成总体报告
+    # Generate overall report
     if all_dataset_results:
         overall_summary_path = os.path.join(args.output_dir, "overall_summary.json")
         
@@ -567,27 +568,27 @@ def run_multi_dataset_evaluation(args, models, tokenizer):
         with open(overall_summary_path, 'w', encoding='utf-8') as f:
             json.dump(overall_summary, f, ensure_ascii=False, indent=2)
         
-        # 输出总体统计信息
+        # Output overall statistics
         logger.info(f"\n{'='*80}")
-        logger.info("多数据集评估总体结果")
+        logger.info("Multi-dataset Evaluation Summary")
         logger.info(f"{'='*80}")
         
         for dataset_name, results in all_dataset_results.items():
             stats = results['statistics']
             pass_at_k = stats['unbiased_pass_at_k']
-            logger.info(f"数据集: {dataset_name}")
-            logger.info(f"  评估次数: {len(results['runs_stats'])}")
-            logger.info(f"  成功率: {stats['success_rate']['mean']:.2f}% ± {stats['success_rate']['std']:.2f}%")
-            logger.info(f"  语法通过率: {stats['syntax_pass_rate']['mean']:.2f}% ± {stats['syntax_pass_rate']['std']:.2f}%")
-            logger.info(f"  无偏Pass@1: {pass_at_k['pass_at_1']:.2f}%")
-            logger.info(f"  无偏Pass@8: {pass_at_k['pass_at_8']:.2f}%")
-            logger.info(f"  无偏Pass@16: {pass_at_k['pass_at_16']:.2f}%")
-            logger.info(f"  语法Pass@1: {pass_at_k['syntax_pass_at_1']:.2f}%")
-            logger.info(f"  语法Pass@8: {pass_at_k['syntax_pass_at_8']:.2f}%")
-            logger.info(f"  语法Pass@16: {pass_at_k['syntax_pass_at_16']:.2f}%")
-            logger.info(f"  平均迭代次数: {stats['avg_iterations']['mean']:.2f} ± {stats['avg_iterations']['std']:.2f}")
-            logger.info(f"  平均处理时间: {stats['total_time']['mean']:.2f}s ± {stats['total_time']['std']:.2f}s")
+            logger.info(f"Dataset: {dataset_name}")
+            logger.info(f"  Number of runs: {len(results['runs_stats'])}")
+            logger.info(f"  Success rate: {stats['success_rate']['mean']:.2f}% ± {stats['success_rate']['std']:.2f}%")
+            logger.info(f"  Syntax pass rate: {stats['syntax_pass_rate']['mean']:.2f}% ± {stats['syntax_pass_rate']['std']:.2f}%")
+            logger.info(f"  Unbiased Pass@1: {pass_at_k['pass_at_1']:.2f}%")
+            logger.info(f"  Unbiased Pass@8: {pass_at_k['pass_at_8']:.2f}%")
+            logger.info(f"  Unbiased Pass@16: {pass_at_k['pass_at_16']:.2f}%")
+            logger.info(f"  Syntax Pass@1: {pass_at_k['syntax_pass_at_1']:.2f}%")
+            logger.info(f"  Syntax Pass@8: {pass_at_k['syntax_pass_at_8']:.2f}%")
+            logger.info(f"  Syntax Pass@16: {pass_at_k['syntax_pass_at_16']:.2f}%")
+            logger.info(f"  Average iterations: {stats['avg_iterations']['mean']:.2f} ± {stats['avg_iterations']['std']:.2f}")
+            logger.info(f"  Average processing time: {stats['total_time']['mean']:.2f}s ± {stats['total_time']['std']:.2f}s")
             logger.info("")
 
-        logger.info(f"总体报告保存至: {overall_summary_path}")
+        logger.info(f"Overall report saved to: {overall_summary_path}")
         logger.info(f"{'='*80}")

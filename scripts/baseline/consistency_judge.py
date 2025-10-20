@@ -10,7 +10,7 @@ import math
 from typing import List, Dict
 
 '''
-输入格式
+Input
 {
     'id':xxx,
     'informal_statement':xxx
@@ -27,7 +27,7 @@ from typing import List, Dict
     ]
 }
 
-输出格式
+Output
 {
     'id':xxx,
     'informal_statement':xxx
@@ -74,11 +74,6 @@ def get_prompt(tokenizer, informal_statement, formal_statement):
     return text
 
 def calculate_pass_at_k_exact(data_list: List[Dict], k_values=[1, 4, 8, 16], model='qwq'):
-    """
-    使用精确公式计算 pass@k（更高效的方法）
-    pass@k = 1 - C(n-c, k) / C(n, k)
-    其中 n 是总样本数，c 是通过的样本数
-    """
     def combination(n, r):
         if r > n or r < 0:
             return 0
@@ -92,16 +87,15 @@ def calculate_pass_at_k_exact(data_list: List[Dict], k_values=[1, 4, 8, 16], mod
         
         for item in data_list:
             pass_list = ['"correct"' in r.split('"is_assistant_correct"')[-1].lower() for r in item['consistency'][model]]
-            n = len(pass_list)  # 总样本数
-            c = sum(pass_list)  # 通过的样本数
-            
-            # 如果没有足够的样本，跳过这个问题
+            n = len(pass_list) 
+            c = sum(pass_list) 
+    
             if n < k:
                 continue
                 
             valid_problems += 1
             
-            # 使用精确公式计算 pass@k
+  
             if c == 0:
                 problem_pass_at_k = 0
             else:
@@ -109,7 +103,6 @@ def calculate_pass_at_k_exact(data_list: List[Dict], k_values=[1, 4, 8, 16], mod
             
             total_score += problem_pass_at_k
         
-        # 计算总体 pass@k
         if valid_problems > 0:
             pass_at_k = total_score / valid_problems
             results[f'pass@{k}'] = pass_at_k
@@ -120,18 +113,12 @@ def calculate_pass_at_k_exact(data_list: List[Dict], k_values=[1, 4, 8, 16], mod
 
 def print_pass_at_k_results(data_list: List[Dict], method='exact',model='qwq'):
     """
-    打印 pass@k 结果
-    
-    Args:
-        data_list: 数据列表
-        method: 'exact' 或 'sampling'
+    print pass@k
     """
     if method == 'exact':
         results = calculate_pass_at_k_exact(data_list, model=model)
         print("Pass@K Results (Exact Formula):")
-    else:
-        results = calculate_pass_at_k_with_sampling(data_list, model=model)
-        print("Pass@K Results (Random Sampling):")
+
     
     print("-" * 30)
     for metric, value in results.items():
@@ -238,5 +225,4 @@ if __name__ == "__main__":
         
         write_jsonl(data, save_path, 'w')
 
-        print("=== 精确公式方法 ===")
         results_exact = print_pass_at_k_results(data, method='exact',model=args.model)

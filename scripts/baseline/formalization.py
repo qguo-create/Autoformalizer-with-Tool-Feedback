@@ -10,13 +10,13 @@ from template import ATF_system_prompt
 
 
 '''
-输入格式
-{   'id': 唯一标识符,
-    'informal_statement': 自然语言定理,
+Input format
+{   'id': unique identifier,
+    'informal_statement': natural language theorem,
     ...
 }
 
-输出格式
+Output format
 {   
     'id':xxx,
     'informal_statement':xxx
@@ -86,10 +86,10 @@ if __name__ == "__main__":
     parser.add_argument("--n", type=int, required=True)
     parser.add_argument("--gpu", type=str, required=True)
     parser.add_argument("--model", type=str, required=True)
-    parser.add_argument("--max_length", type=int, default=8192, help="")
-    parser.add_argument("--batch_size", type=int, default=128, help="")
-    parser.add_argument("--top_p", type=float, default=0.95, help="top_p")
-    parser.add_argument("--temperature", type=float, default=0.6, help="")
+    parser.add_argument("--max_length", type=int, default=8192)
+    parser.add_argument("--batch_size", type=int, default=128)
+    parser.add_argument("--top_p", type=float, default=0.95)
+    parser.add_argument("--temperature", type=float, default=0.6)
     args = parser.parse_args()
 
     model_path = args.model

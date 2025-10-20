@@ -1,12 +1,7 @@
-安装依赖
-```bash
-python3 -m pip install -r requirements.txt
-```
-
-调用沙盒
+Call Lean 4
 ```python
 from kimina_client import KiminaSandboxClient, Snippet
-server_heartbeat_record_path = "/mnt/dolphinfs/hdd_pool/docker/user/hadoop-aipnlp/zhangjianfei09/cfs/kls_heartbeat"
+server_heartbeat_record_path = "xxx"
 server_timeout = 600
 client = KiminaSandboxClient(
     heartbeat_record_path=server_heartbeat_record_path,

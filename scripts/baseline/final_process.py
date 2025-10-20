@@ -5,11 +5,6 @@ import math
 from typing import List, Dict
 
 def calculate_pass_at_k_exact(data_list: List[Dict], k_values=[1, 4, 8, 16], model='qwq'):
-    """
-    使用精确公式计算 pass@k（更高效的方法）
-    pass@k = 1 - C(n-c, k) / C(n, k)
-    其中 n 是总样本数，c 是通过的样本数
-    """
     def combination(n, r):
         if r > n or r < 0:
             return 0
@@ -23,24 +18,23 @@ def calculate_pass_at_k_exact(data_list: List[Dict], k_values=[1, 4, 8, 16], mod
         
         for item in data_list:
             pass_list = item['consistency']['labels']
-            n = len(pass_list)  # 总样本数
-            c = sum(pass_list)  # 通过的样本数
+            n = len(pass_list) 
+            c = sum(pass_list) 
             
-            # 如果没有足够的样本，跳过这个问题
+     
             if n < k:
                 continue
                 
             valid_problems += 1
             
-            # 使用精确公式计算 pass@k
+ 
             if c == 0:
                 problem_pass_at_k = 0
             else:
                 problem_pass_at_k = 1 - combination(n - c, k) / combination(n, k)
             
             total_score += problem_pass_at_k
-        
-        # 计算总体 pass@k
+
         if valid_problems > 0:
             pass_at_k = total_score / valid_problems
             results[f'pass@{k}'] = pass_at_k
@@ -51,11 +45,7 @@ def calculate_pass_at_k_exact(data_list: List[Dict], k_values=[1, 4, 8, 16], mod
 
 def print_pass_at_k_results(data_list: List[Dict], method='exact'):
     """
-    打印 pass@k 结果
-    
-    Args:
-        data_list: 数据列表
-        method: 'exact' 或 'sampling'
+    print pass@k
     """
     res_text = ''
     if method == 'exact':
@@ -75,20 +65,18 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--qwq_path", type=str, required=True)
     parser.add_argument("--qwen3_path", type=str, required=True)
+    parser.add_argument("--qwq_res_path", type=str, required=True)
+    parser.add_argument("--qwen3_res_path", type=str, required=True)
     parser.add_argument("--res_save_path", type=str, required=True)
     args = parser.parse_args()
 
-    qwq_path, qwen3_path = args.qwq_path, args.qwen3_path
+    qwq_data = read_jsonl(args.qwq_res_path)
 
-    qwq_data = read_jsonl(qwq_path)
-
-    qwen3_data = read_jsonl(qwen3_path)
+    qwen3_data = read_jsonl(args.qwen3_res_path)
 
     for qwq, qwen3 in zip(qwq_data, qwen3_data):
-        qwq['consistency']['qwen3'] = qwen3['consistency']['/mnt/dolphinfs/ssd_pool/docker/user/hadoop-nlp-sh02/o1/guoqi/model/Qwen3-32B']
-        qwq['consistency']['qwq'] = qwq['consistency']['/mnt/dolphinfs/ssd_pool/docker/user/hadoop-nlp-sh02/o1/guoqi/model/QWQ-32B']
-        del qwq['consistency']['/mnt/dolphinfs/ssd_pool/docker/user/hadoop-nlp-sh02/o1/guoqi/model/QWQ-32B']
-
+        qwq['consistency']['qwen3'] = qwen3['consistency'][args.qwen3_path]
+        qwq['consistency']['qwq'] = qwq['consistency'][args.qwq_path]
 
     for d in tqdm(qwq_data):
         d['consistency']['labels'] = []

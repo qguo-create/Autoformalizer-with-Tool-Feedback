@@ -12,7 +12,7 @@ SEEDS=[12,34,56,78,90]
 
 @dataclass
 class SampleState:
-    """样本状态枚举"""
+    """Sample state enumeration"""
     NEED_INFERENCE = "need_inference"
     NEED_SYNTAX_CHECK = "need_syntax_check" 
     NEED_QWQ_CHECK = "need_qwq_check"
@@ -22,24 +22,24 @@ class SampleState:
 
 # 添加一个简单的增量保存器
 class IncrementalSaver:
-    """增量保存器，用于保存已完成的样本"""
+    """Incremental saver for saving completed samples"""
     
     def __init__(self, output_path: str, logger):
         self.output_path = output_path
         self.logger = logger
         self.save_lock = threading.Lock()
         
-        # 确保输出目录存在
+        # Ensure output directory exists
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         
     def save_completed_samples(self, samples: List[dict]):
-        """保存已完成的样本"""
+        """Save completed samples"""
         if not samples:
             return
             
         with self.save_lock:
             try:
-                # 准备保存的数据
+                # Prepare data to save
                 results_to_save = []
                 for sample in samples:
                     results_to_save.append({
@@ -54,40 +54,40 @@ class IncrementalSaver:
                         'iterations': sample['iteration_count']
                     })
                 
-                # 以追加模式写入文件
+
                 with open(self.output_path, 'a', encoding='utf-8') as f:
                     for result in results_to_save:
                         f.write(json.dumps(result, ensure_ascii=False) + '\n')
                 
-                self.logger.info(f"✓ 增量保存 {len(samples)} 个已完成样本到 {self.output_path}")
+                self.logger.info(f"✓ Incrementally saved {len(samples)} completed samples to {self.output_path}")
                 
             except Exception as e:
-                self.logger.error(f"✗ 增量保存失败: {e}")
+                self.logger.error(f"✗ Incremental save failed: {e}")
 
 class UnifiedDataPool:
-    """统一的数据池，支持多状态样本管理"""
+    """Unified data pool supporting multi-state sample management"""
     
     def __init__(self, tokenizer, max_batch_size=256, max_prompt_length=40000):
         self.max_batch_size = max_batch_size
         self.max_prompt_length = max_prompt_length
         self.lock = threading.RLock()
         
-        # 按状态分组的样本队列
+        # State-grouped sample queues
         self.samples_by_state = defaultdict(deque)
         
         self.tokenizer = tokenizer
 
-        # 样本索引映射（快速查找）
+        # Sample index mapping (fast lookup)
         self.sample_index_map = {}
         
-        # 正在处理的样本跟踪
+        # Processing sample tracking
         self.processing_samples = {}
         
-        # 已完成和失败的样本
+        # Completed and failed samples
         self.completed_samples = []
         self.failed_samples = []
         
-        # 统计信息
+        # Statistics
         self.stats = {
             'total_samples': 0,
             'completed_samples': 0,
@@ -96,11 +96,11 @@ class UnifiedDataPool:
             'length_failed_samples': 0
         }
         
-        # 添加批量更新锁，防止其他工作器在批量更新期间取样本
+        # Batch update lock to prevent workers from taking samples during batch updates
         self.batch_update_lock = threading.Lock()
     
     def _check_prompt_length(self, prompt: str) -> bool:
-        """检查prompt长度是否超限（使用tokenizer统计token数量）"""
+        """Check if prompt length exceeds limit (using tokenizer)"""
         try:
             tokens = self.tokenizer.encode(prompt, add_special_tokens=True)
             token_count = len(tokens)
@@ -110,13 +110,13 @@ class UnifiedDataPool:
             return False
 
     def add_samples(self, samples: List[dict]):
-        """添加新样本到数据池"""
+        """Add new samples to data pool"""
         with self.lock:
             for sample in samples:
                 sample['state'] = SampleState.NEED_INFERENCE
                 sample['processing'] = False
                 
-                # 检查初始prompt长度
+                # Check initial prompt length
                 initial_prompt = sample['prompts'][-1] if sample['prompts'] else ""
                 if not self._check_prompt_length(initial_prompt):
                     actual_tokens = len(self.tokenizer.encode(initial_prompt, add_special_tokens=True)) if self.tokenizer else len(initial_prompt)
@@ -132,7 +132,7 @@ class UnifiedDataPool:
                 self.stats['total_samples'] += 1
 
     def get_samples_for_processing(self, state: str, max_count: int = None) -> List[dict]:
-        """获取指定状态的样本进行处理 - 后加入的样本优先处理（LIFO）"""
+        """Get samples in specified state for processing - LIFO priority"""
         if max_count is None:
             max_count = self.max_batch_size
         
@@ -161,7 +161,7 @@ class UnifiedDataPool:
             return available_samples
     
     def batch_update_sample_states(self, updates: List[tuple]):
-        """批量更新样本状态，包含长度检查"""
+        """Batch update sample states with length check"""
         with self.batch_update_lock:
             with self.lock:
                 completed_samples = []
@@ -213,21 +213,21 @@ class UnifiedDataPool:
                 self.stats['length_failed_samples'] += length_failed_count
     
     def update_sample_state(self, sample: dict, new_state: str, remove_processing=True):
-        """单个样本状态更新（保持向后兼容）"""
+        """Single sample state update"""
         self.batch_update_sample_states([(sample, new_state, remove_processing)])
     
     def has_processing_samples(self) -> bool:
-        """检查是否有正在处理的样本"""
+        """Check if any samples are being processed"""
         with self.lock:
             return len(self.processing_samples) > 0
     
     def get_processing_sample_count(self) -> int:
-        """获取正在处理的样本数量"""
+        """Get count of processing samples"""
         with self.lock:
             return len(self.processing_samples)
     
     def get_pool_status(self) -> Dict:
-        """获取数据池状态"""
+        """Get data pool status"""
         with self.lock:
             finished_samples = self.stats['completed_samples'] + self.stats['failed_samples']
             
@@ -256,7 +256,7 @@ class UnifiedDataPool:
             return status
     
     def has_work(self) -> bool:
-        """检查是否还有工作要做"""
+        """Check if there's remaining work"""
         with self.lock:
             has_queued_samples = any(len(queue) > 0 for queue in self.samples_by_state.values())
             has_processing_samples = len(self.processing_samples) > 0
@@ -266,13 +266,13 @@ class UnifiedDataPool:
             return has_queued_samples or has_processing_samples or remaining_samples > 0
     
     def get_all_finished_samples(self) -> List[dict]:
-        """获取所有已完成的样本（包括成功和失败）"""
+        """Get all finished samples (including success/failure)"""
         with self.lock:
             return self.completed_samples.copy() + self.failed_samples.copy()
 
 # 保持原有的Worker类不变...
 class AsyncStageWorker:
-    """异步阶段工作器基类"""
+    """Asynchronous stage worker base class"""
     
     def __init__(self, stage_name: str, data_pool: UnifiedDataPool, logger, check_interval: float = 0.1):
         self.stage_name = stage_name
@@ -283,50 +283,50 @@ class AsyncStageWorker:
         self.worker_thread = None
         
     def start(self):
-        """启动工作线程"""
+        """Start worker thread"""
         self.running = True
         self.worker_thread = threading.Thread(target=self._work_loop, name=f"{self.stage_name}_worker")
         self.worker_thread.start()
-        self.logger.info(f"[{self.stage_name}] 工作线程已启动")
+        self.logger.info(f"[{self.stage_name}] Worker thread started")
     
     def stop(self):
-        """停止工作线程"""
+        """Stop worker thread"""
         self.running = False
         if self.worker_thread:
             self.worker_thread.join()
-        self.logger.info(f"[{self.stage_name}] 工作线程已停止")
+        self.logger.info(f"[{self.stage_name}] Worker thread stopped")
     
     def _work_loop(self):
-        """工作循环"""
+        """Work loop"""
         while self.running:
             try:
                 samples = self.get_samples_to_process()
                 
                 if samples:
-                    self.logger.info(f"[{self.stage_name}] 开始处理 {len(samples)} 个样本")
+                    self.logger.info(f"[{self.stage_name}] Processing {len(samples)} samples")
                     start_time = time.time()
                     
                     self.process_samples(samples)
                     
                     end_time = time.time()
-                    self.logger.info(f"[{self.stage_name}] 完成处理，耗时: {end_time-start_time:.2f}s")
+                    self.logger.info(f"[{self.stage_name}] Processing completed, time: {end_time-start_time:.2f}s")
                 else:
                     time.sleep(self.check_interval)
                     
             except Exception as e:
-                self.logger.error(f"[{self.stage_name}] 处理出错: {e}")
+                self.logger.error(f"[{self.stage_name}] Processing error: {e}")
                 time.sleep(1)
     
     def get_samples_to_process(self) -> List[dict]:
-        """获取需要处理的样本（子类实现）"""
+        """Get samples to process (to be implemented by subclass)"""
         raise NotImplementedError
     
     def process_samples(self, samples: List[dict]):
-        """处理样本（子类实现）"""
+        """Process samples (to be implemented by subclass)"""
         raise NotImplementedError
 
 class LLMInferenceWorker(AsyncStageWorker):
-    """LLM推理工作器"""
+    """LLM inference worker"""
     
     def __init__(self, llm, sampling_params, data_pool, logger, max_iterations=8, batch_size=256, name='LLM_Inference 1'):
         super().__init__("LLM_Inference", data_pool, logger, check_interval=0.05)
@@ -373,7 +373,7 @@ class LLMInferenceWorker(AsyncStageWorker):
         self.data_pool.batch_update_sample_states(updates)
 
     def _handle_invalid_tool_call(self, sample) -> str:
-        """处理无效工具调用"""
+        """Handle invalid tool calls"""
         sample['iteration_count'] += 1
         
         if sample['iteration_count'] >= self.max_iterations:
@@ -392,7 +392,7 @@ class LLMInferenceWorker(AsyncStageWorker):
         return SampleState.NEED_INFERENCE
 
 class SyntaxCheckWorker(AsyncStageWorker):
-    """语法检查工作器"""
+    """Syntax check worker"""
     
     def __init__(self, data_pool, logger, max_iterations=8, batch_size=256):
         super().__init__("Syntax_Check", data_pool, logger, check_interval=0.1)
@@ -424,7 +424,7 @@ class SyntaxCheckWorker(AsyncStageWorker):
         self.data_pool.batch_update_sample_states(updates)
     
     def _determine_next_state(self, sample, result) -> str:
-        """根据语法检查结果决定下一步状态"""
+        """Determine next state based on syntax check result"""
         
         if not result.get('pass'):
             sample['iteration_count'] += 1
@@ -446,7 +446,7 @@ class SyntaxCheckWorker(AsyncStageWorker):
         return SampleState.NEED_INFERENCE
 
 class QWQConsistencyWorker(AsyncStageWorker):
-    """QWQ一致性检查工作器"""
+    """QWQ consistency check worker"""
     
     def __init__(self, qwq_model, tokenizer, consistency_params, data_pool, logger, max_iterations=8, batch_size=256):
         super().__init__("QWQ_Consistency", data_pool, logger, check_interval=0.1)
@@ -490,7 +490,7 @@ class QWQConsistencyWorker(AsyncStageWorker):
         self.data_pool.batch_update_sample_states(updates)
     
     def _determine_next_state(self, sample, result) -> str:
-        """根据QWQ结果决定下一步状态"""
+        """Determine next state based on QWQ result"""
         sample['iteration_count'] += 1
         
         if sample['iteration_count'] >= self.max_iterations:
@@ -511,7 +511,7 @@ class QWQConsistencyWorker(AsyncStageWorker):
         return SampleState.NEED_INFERENCE
 
 class QWen3ConsistencyWorker(AsyncStageWorker):
-    """QWen3一致性检查工作器"""
+    """QWen3 consistency check worker"""
     
     def __init__(self, qwen3_model, tokenizer, consistency_params, data_pool, logger, max_iterations=8, batch_size=256, saver=None):
         super().__init__("QWen3_Consistency", data_pool, logger, check_interval=0.1)
@@ -559,7 +559,7 @@ class QWen3ConsistencyWorker(AsyncStageWorker):
             self.saver.save_completed_samples(completed_samples)
     
     def _determine_next_state(self, sample, result) -> str:
-        """根据QWen3结果决定下一步状态"""
+        """Determine next state based on QWen3 result"""
         
         if result.get('pass'):
             sample['completed'] = True
@@ -585,8 +585,8 @@ class QWen3ConsistencyWorker(AsyncStageWorker):
             return SampleState.NEED_INFERENCE
 
 class EventDrivenPipelineManager:
-    """事件驱动的流水线管理器"""
-    
+    """Event-driven pipeline manager"""
+
     def __init__(self, llm1, llm2, qwq_model, qwen3_model, tokenizer, 
                  sampling_params, consistency_params, logger, 
                  max_batch_size=256, max_iterations=8, output_path=None, max_prompt_length=40000):
@@ -609,9 +609,9 @@ class EventDrivenPipelineManager:
         self.running = False
 
     def start_pipeline(self, samples):
-        """启动流水线处理"""
+        """Start pipeline processing"""
         
-        self.logger.info(f"启动事件驱动流水线，样本数: {len(samples)}")
+        self.logger.info(f"Starting event-driven pipeline, sample count: {len(samples)}")
         self.data_pool.add_samples(samples)
         
         for worker in self.workers:
@@ -629,29 +629,29 @@ class EventDrivenPipelineManager:
         return self.data_pool.get_all_finished_samples()
     
     def _monitor_progress(self):
-        """监控处理进度"""
+        """Monitor processing progress"""
         while self.running:
             status = self.data_pool.get_pool_status()
-            self.logger.info(f"进度监控 - 总样本: {status['total_samples']}, "
-                        f"已完成: {status['completed_samples']}, "
-                        f"失败: {status['failed_samples']}, "
-                        f"长度超限失败: {status['length_failed_samples']}, "
-                        f"剩余: {status['remaining_samples']}")
-            self.logger.info(f"各状态总样本数: {status['samples_by_state_total']}")
-            self.logger.info(f"各状态可处理样本数: {status['samples_by_state_available']}")
-            self.logger.info(f"处理中样本数: {status['processing_counts']}")
+            self.logger.info(f"Progress monitor - Total samples: {status['total_samples']}, "
+                        f"Completed: {status['completed_samples']}, "
+                        f"Failed: {status['failed_samples']}, "
+                        f"Length failed: {status['length_failed_samples']}, "
+                        f"Remaining: {status['remaining_samples']}")
+            self.logger.info(f"Total samples by state: {status['samples_by_state_total']}")
+            self.logger.info(f"Available samples by state: {status['samples_by_state_available']}")
+            self.logger.info(f"Processing counts: {status['processing_counts']}")
             
             time.sleep(60)
     
     def _wait_for_completion(self):
-        """等待所有样本完成处理"""
+        """Wait for all samples to complete processing"""
         while self.data_pool.has_work():
             time.sleep(5)
         
         time.sleep(10)
     
     def stop_pipeline(self):
-        """停止流水线"""
+        """Stop pipeline"""
         self.running = False
         
         for worker in self.workers:
@@ -660,4 +660,4 @@ class EventDrivenPipelineManager:
         if self.monitor_thread:
             self.monitor_thread.join()
         
-        self.logger.info("事件驱动流水线已停止")
+        self.logger.info("Event-driven pipeline stopped")

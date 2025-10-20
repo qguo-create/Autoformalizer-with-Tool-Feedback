@@ -11,20 +11,19 @@ from template import consistency_template, ATF_system_prompt
 
 def extract_json_blocks(text: str, return_first_only: bool = False) -> Union[Optional[str], List[str]]:
     """
-    提取文本中```json和```之间的JSON内容
+    Extract JSON content between ```json and ``` blocks
     
     Args:
-        text: 包含JSON代码块的文本
-        return_first_only: 如果为True，只返回第一个匹配项；否则返回所有匹配项列表
+        text: Text containing JSON code blocks
+        return_first_only: If True, returns first match; otherwise returns all matches
         
     Returns:
-        如果return_first_only=True，返回第一个匹配的JSON字符串或None（如果没有匹配）
-        如果return_first_only=False，返回所有匹配的JSON字符串列表
+        If return_first_only=True: First matched JSON string or None
+        If return_first_only=False: List of all matched JSON strings
     """
-    # 使用正则表达式匹配```json和```之间的内容
+    # Regular expression to match content between ```json and ```
     pattern = r"```json\s*(.*?)\s*```"
-    
-    # re.DOTALL标志使.能匹配包括换行符在内的任意字符
+
     matches = re.findall(pattern, text, re.DOTALL)
     
     if not matches:
@@ -33,7 +32,7 @@ def extract_json_blocks(text: str, return_first_only: bool = False) -> Union[Opt
     return matches[0] if return_first_only else matches
 
 def parse_tool_call(text: str) -> dict:
-    """简化版本的工具调用解析函数"""
+    """Simplified tool call parser"""
     match = re.search(r'<tool_calls>(.*?)</tool_calls>', text, re.DOTALL)
     if match:
         try:
@@ -43,7 +42,7 @@ def parse_tool_call(text: str) -> dict:
     return {}
 
 def format_tool_results_as_user_message(tool_name, tool_result):
-    """将工具调用结果格式化为清晰易读的格式"""
+    """Format tool results into human-readable message"""
     message = "<tool_results>\n"
     message += f"Function: {tool_name}\n"
     message += f"Output: {json.dumps(tool_result, indent=2, ensure_ascii=False)}\n"
@@ -80,7 +79,7 @@ def get_consistency_prompt(tokenizer, informal_statement, formal_statement):
     )
 
 def setup_logger(log_dir):
-    """设置日志记录器"""
+    """Configure logging system"""
     os.makedirs(log_dir, exist_ok=True)
     timestamp = time.strftime("%Y%m%d_%H%M%S",time.localtime(time.time()))
     log_filename = f"inference_{timestamp}.log"
@@ -90,20 +89,19 @@ def setup_logger(log_dir):
     logger = logging.getLogger('inference_pipeline')
     logger.setLevel(logging.INFO)
     
-    # 清除已存在的handlers，避免重复
+    # Clear existing handlers to avoid duplication
     for handler in logger.handlers[:]:
         logger.removeHandler(handler)
     
-    # 阻止向父logger传播，避免重复输出
     logger.propagate = False
     
-    # 文件handler
+    # File handler
     file_handler = logging.FileHandler(log_path, encoding='utf-8')
     file_handler.setLevel(logging.INFO)
     file_formatter = logging.Formatter(log_format)
     file_handler.setFormatter(file_formatter)
     
-    # 控制台handler
+    # Console handler
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
     console_formatter = logging.Formatter(log_format)
@@ -119,10 +117,7 @@ def batch_syntax_check(lean4_code_list):
     lean4_code_list = [c.replace('```lean4\n','').replace('\n```','') for c in lean4_code_list]
     temp_results = batch_verify_lean_codes(lean4_code_list)
     for code, temp_result in zip(lean4_code_list, temp_results):
-        # print('code:')
-        # print(code)
-        # print('results:')
-        # print(temp_result)
+
         try:
             syntax_results.append({"pass": temp_result['pass'], "errors": temp_result['info']['errors']})
         except:
@@ -139,7 +134,7 @@ def batch_syntax_check(lean4_code_list):
     return syntax_results
 
 def load_model_on_gpus(model_path, gpu_ids, model_name, seed):
-    """在指定的GPU上加载模型"""
+    """Load model on specified GPUs"""
     os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, gpu_ids))
     
     print(f"Loading {model_name} on GPUs {gpu_ids} with seed {seed}...")
@@ -168,7 +163,7 @@ def write_jsonl(data_to_write, path, mode):
             f.write(line + '\n')
 
 def batch_generate(llm, prompts, sampling_params, batch_size=4096):
-    """分批批量生成响应"""
+    """Batch generate responses with configurable batch size"""
     all_outputs = []
     
     for i in range(0, len(prompts), batch_size):
