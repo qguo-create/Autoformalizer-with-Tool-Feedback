@@ -1,10 +1,7 @@
 import os
 import json
 from typing import Dict, List
-from kimina_client import KiminaSandboxClient, Snippet
-
-# To be filled
-server_heartbeat_record_path = "xxx"
+from kimina_client import KiminaSandboxClient, Snippet, KiminaClient
 
 def format_results(results):
 
@@ -39,12 +36,9 @@ def format_results(results):
 
     return returns
 
-def batch_verify_lean_codes(lean_contents: List[str], concurrency: int = 32, server_timeout=600) -> List[Dict]:
+def batch_verify_lean_codes(lean_contents: List[str], concurrency: int = 5, server_timeout=600) -> List[Dict]:
     
-    client = KiminaSandboxClient(
-        heartbeat_record_path=server_heartbeat_record_path,
-        http_timeout=server_timeout
-    )
+    client = KiminaClient(api_url=f"http://localhost:8000", http_timeout=self.server_timeout)
     
     snips = [Snippet(id=f"{idx}", code=str(proof)) for idx, proof in enumerate(lean_contents)]
     
