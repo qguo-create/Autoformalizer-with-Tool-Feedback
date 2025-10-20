@@ -32,9 +32,9 @@ The models and dataset are available on Hugging Face Hub:
 
 | Type | Name                  | Hugging Face Link                                                                 |
 |--------------|-------------------------------|-----------------------------------------------------------------------------------|
-| Model   | ATF-32B             | [link](https://huggingface.co/datasets/lulululuyi/R-HORIZON-Math500)             |
-| Model   | ATF-8B              | [link](https://huggingface.co/datasets/lulululuyi/R-HORIZON-AIME24)               |
-| Dataset   | Numina-ATF              | [link](https://huggingface.co/datasets/lulululuyi/R-HORIZON-AIME25)               |
+| Model   | ATF-32B             | [link](https://huggingface.co/Buchilaguo/ATF-32B)             |
+| Model   | ATF-8B              | [link](https://huggingface.co/Buchilaguo/ATF-8B)             |
+| Dataset   | Numina-ATF              | [link](https://huggingface.co/datasets/Buchilaguo/Numina-ATF)               |
 
 
 ## Quick Start
@@ -54,7 +54,7 @@ Then deploy a Lean API service following [Kimina Lean Server](https://github.com
 
 ### Evaluation
 
-The repository includes scripts for evaluating the ATF model and other baselines. You can start evaluation by running the following command:
+The repository includes scripts for evaluating the ATF model and other baselines. You can start the evaluation by running the following command:
 
 To evaluate the ATF models.
 ```bash
