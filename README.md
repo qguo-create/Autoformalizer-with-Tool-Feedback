@@ -50,6 +50,8 @@ pip3 install -r requirements.txt
 ```
 Then deploy a Lean API service following [Kimina Lean Server](https://github.com/project-numina/kimina-lean-server)        
 
+
+
 ### Evaluation
 
 The repository includes scripts for evaluating the ATF model and other baselines. You can start evaluation by running the following command:
